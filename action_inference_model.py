@@ -144,5 +144,3 @@ def train_action_inference(inputs, targets, epochs=1, steps_per_epoch=1000, prin
                         validation_steps=validation_steps)
 
     return model, history
-
-

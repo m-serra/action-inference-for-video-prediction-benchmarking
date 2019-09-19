@@ -1,14 +1,3 @@
-# Copyright 2016 The TensorFlow Authors All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
@@ -18,13 +7,12 @@
 """
 
 import os
-import re
 import tensorflow as tf
 from training_flags import FLAGS
 from .base_data_reader import BaseDataReader
 
 
-class BairDataReader(BaseDataReader):
+class GooglePushDataReader(BaseDataReader):
 
     def __init__(self,
                  dataset_dir=None,
@@ -32,19 +20,27 @@ class BairDataReader(BaseDataReader):
                  **kwargs):
         """
         Dataset class for the BAIR and Google Push datasets.
+        :param data: (str, optional) Name of the dataset. One of 'bair', 'googlepush', 'bair_predictions',
+                     'googlepush_predictions'
         :param dataset_dir: (str, optional) path to dataset directory, containing the /train and a /test directories.
                             Defaults to FLAGS.bair_dir or FLAGS.google_dir, defined in training_flags.py, depending on
                             the dataset_name parameter.
+        :param shuffle: (boolean, optional) whether to shuffle the train/val filenames and tfrecord samples. Defaults
+                        to FLAGS.shuffle.
+        :param dataset_repeat: (int, optional) number of times the dataset can be iterated. Default allows indefinite
+                               iteration.
+        :param sequence_length_train: (int, optional) number of timesteps to use for training and validation
+        :param sequence_length_test: (int, optional) number of timesteps to use for test
         """
-        super(BairDataReader, self).__init__(*args, **kwargs)
+        super(GooglePushDataReader, self).__init__(*args, **kwargs)
         self.COLOR_CHAN = 3
         self.IMG_WIDTH = 64
         self.IMG_HEIGHT = 64
-        self.STATE_DIM = 3
-        self.ACTION_DIM = 4
-        self.ORIGINAL_WIDTH = 64
-        self.ORIGINAL_HEIGHT = 64
-        self.data_dir = dataset_dir if dataset_dir else FLAGS.bair_dir
+        self.STATE_DIM = 5
+        self.ACTION_DIM = 5
+        self.ORIGINAL_WIDTH = 640
+        self.ORIGINAL_HEIGHT = 512
+        self.data_dir = dataset_dir if dataset_dir else FLAGS.google_dir
         self.train_filenames, self.val_filenames, self.test_filenames = self.set_filenames()
 
     def _parse_sequences(self, serialized_example):
@@ -53,10 +49,9 @@ class BairDataReader(BaseDataReader):
 
         for i in range(self.sequence_length_to_use):
 
-            image_name = str(i) + '/image_aux1/encoded'
-            action_name = str(i) + '/action'
-            state_name = str(i) + '/endeffector_pos'
-            # double_view option (check the colab repo)
+            image_name = 'move/' + str(i) + '/image/encoded'
+            action_name = 'move/' + str(i) + '/commanded_pose/vec_pitch_yaw'
+            state_name = 'move/' + str(i) + '/endeffector/vec_pitch_yaw'
 
             features = {image_name: tf.FixedLenFeature([1], tf.string),
                         action_name: tf.FixedLenFeature([self.ACTION_DIM], tf.float32),
@@ -64,9 +59,9 @@ class BairDataReader(BaseDataReader):
 
             features = tf.parse_single_example(serialized_example, features=features)
 
-            image = tf.decode_raw(features[image_name], tf.uint8)
-            image = tf.reshape(image, shape=[1, self.ORIGINAL_HEIGHT * self.ORIGINAL_WIDTH * self.COLOR_CHAN])
-            image = tf.reshape(image, shape=[self.ORIGINAL_HEIGHT, self.ORIGINAL_WIDTH, self.COLOR_CHAN])
+            image_buffer = tf.reshape(features[image_name], shape=[])
+            image = tf.image.decode_jpeg(image_buffer, channels=self.COLOR_CHAN)
+            image.set_shape([self.ORIGINAL_HEIGHT, self.ORIGINAL_WIDTH, self.COLOR_CHAN])
 
             assert self.IMG_HEIGHT == self.IMG_WIDTH, 'Unequal height and width unsupported'
 
@@ -112,23 +107,17 @@ class BairDataReader(BaseDataReader):
     def num_examples_per_epoch(self, mode):
         """
         SOURCE:
-        https://github.com/alexlee-gk/video_prediction/blob/master/video_prediction/datasets/softmotion_dataset.py
+        https://github.com/alexlee-gk/video_prediction/blob/master/video_prediction/datasets/google_robot_dataset.py
         """
-        # extract information from filename to count the number of trajectories in the dataset
-        count = 0
-        if mode == 'train':
-            filenames = self.train_filenames
-        elif mode == 'val':
-            filenames = self.val_filenames
-        elif mode == 'test':
-            filenames = self.test_filenames
-
-        for filename in filenames:
-            match = re.search('traj_(\d+)_to_(\d+).tfrecords', os.path.basename(filename))
-            start_traj_iter = int(match.group(1))
-            end_traj_iter = int(match.group(2))
-            count += end_traj_iter - start_traj_iter + 1
-
-        # alternatively, the dataset size can be determined like this, but it's very slow
-        # count = sum(sum(1 for _ in tf.python_io.tf_record_iterator(filename)) for filename in filenames)
+        # --> NEED TO TEST THIS
+        if os.path.basename(self.input_dir) == 'push_train':
+            count = 51615
+        elif os.path.basename(self.input_dir) == 'push_testseen':
+            count = 1038
+        elif os.path.basename(self.input_dir) == 'push_testnovel':
+            count = 995
+        else:
+            raise NotImplementedError
         return count
+
+
