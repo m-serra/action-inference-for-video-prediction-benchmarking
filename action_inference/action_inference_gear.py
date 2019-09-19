@@ -1,17 +1,17 @@
 import os
 import tensorflow as tf
 from training_flags import FLAGS
-from data_readers.bair_data_reader import DataReader
-from action_inference_model import train_action_inference
+from action_inference.action_inference_model import train_action_inference
+from video_prediction_metrics import VideoPredictionMetrics
 
 
-class BaseActionInference(object):
+class BaseActionInferenceGear(object):
 
-    def __init__(self, model_name, dataset_name, prediction_dataset_dir, model_save_dir):
+    def __init__(self, model_name, dataset_name, ckpts_dir):
         self.model_name = model_name
         self.dataset_name = dataset_name
-        self.prediction_dataset_dir = prediction_dataset_dir
-        self.model_save_dir = model_save_dir
+        self.ckpts_dir = ckpts_dir
+        self.model_save_dir = None # --> set this on the function that trains
         self.seq_len = FLAGS.train_sequence_length
         self.test_seq_len = FLAGS.test_sequence_length
 
@@ -30,16 +30,15 @@ class BaseActionInference(object):
     def vp_restore_model(self):
         pass
 
-    def train_inference_model(self, n_epochs, normalize_targets=False, targets_mean=None, targets_std=None):
+    def create_predictions_dataset(self):
+        pass
+
+    def train_inference_model(self, datareader, n_epochs, normalize_targets=False, targets_mean=None, targets_std=None):
 
         dataset_dir = os.path.join(self.prediction_dataset_dir, self.model_name)
         save_dir = os.path.join(self.model_save_dir, self.model_name)
 
-        d = DataReader(dataset_name=self.dataset_name,
-                       dataset_dir=dataset_dir,
-                       shuffle=True,
-                       sequence_length_train=self.seq_len,
-                       sequence_length_test=self.test_seq_len)
+        d = datareader
 
         # ===== Obtain train data and number of iterations
         train_iterator = d.build_tfrecord_iterator(mode='train')
@@ -89,7 +88,7 @@ class BaseActionInference(object):
     def train_inference_model_online(self):
         pass
 
-    def evaluate_inference_model(self):
+    def evaluate_inference_model(self, datareader):
         """
         """
         # ===== instance a metrics object
@@ -102,12 +101,7 @@ class BaseActionInference(object):
         model_dataset_dir = os.path.join(self.dataset_dir, self.model_name)
 
         # --> split data readers into subcalsses and make a suclass of bair predictoins
-        d = DataReader(dataset_name='bair_predictions',
-                       dataset_dir=model_dataset_dir,
-                       dataset_repeat=1,
-                       shuffle=False,
-                       sequence_length_train=12,
-                       sequence_length_test=sequence_length)
+        d = datareader
 
     def evaluate_inference_model_online(self):
         pass

@@ -37,6 +37,7 @@ class BairDataReader(BaseDataReader):
                             the dataset_name parameter.
         """
         super(BairDataReader, self).__init__(*args, **kwargs)
+        self.dataset_name = 'bair'
         self.COLOR_CHAN = 3
         self.IMG_WIDTH = 64
         self.IMG_HEIGHT = 64

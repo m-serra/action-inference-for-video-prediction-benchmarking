@@ -33,6 +33,7 @@ class GooglePushDataReader(BaseDataReader):
         :param sequence_length_test: (int, optional) number of timesteps to use for test
         """
         super(GooglePushDataReader, self).__init__(*args, **kwargs)
+        self.dataset_name = 'google_push'
         self.COLOR_CHAN = 3
         self.IMG_WIDTH = 64
         self.IMG_HEIGHT = 64

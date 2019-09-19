@@ -27,7 +27,7 @@ class BaseDataReader(object):
         - dataset_repeat: (int) number of times the dataset can be iterated. If None indefinite iteration is
                                 allowed.
         """
-
+        self.dataset_name = None
         self.COLOR_CHAN = None
         self.IMG_WIDTH = None
         self.IMG_HEIGHT = None

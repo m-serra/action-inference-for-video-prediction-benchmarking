@@ -17,6 +17,7 @@ class BairPredictionsDataReader(BairDataReader):
                             the dataset_name parameter.
         """
         super(BairPredictionsDataReader, self).__init__(*args, **kwargs)
+        self.dataset_name = 'bair_predictions'
         self.data_dir = dataset_dir if dataset_dir else FLAGS.bair_predictions_dir
         self.train_filenames, self.val_filenames, self.test_filenames = self.set_filenames()
 
