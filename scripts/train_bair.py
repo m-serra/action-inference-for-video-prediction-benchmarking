@@ -1,6 +1,6 @@
 from training_flags import FLAGS
 from data_readers.bair_data_reader import BairDataReader
-from action_inference.action_inference_gear import BaseActionInference
+from action_inference.base_action_inference_gear import BaseActionInference
 
 def main():
 

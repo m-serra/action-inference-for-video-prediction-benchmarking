@@ -2,7 +2,6 @@ import os
 import tensorflow as tf
 from training_flags import FLAGS
 from action_inference.action_inference_model import train_action_inference
-from video_prediction_metrics import VideoPredictionMetrics
 
 
 class BaseActionInferenceGear(object):
@@ -15,7 +14,7 @@ class BaseActionInferenceGear(object):
         self.seq_len = FLAGS.train_sequence_length
         self.test_seq_len = FLAGS.test_sequence_length
 
-    def vp_forward_pass(self):
+    def vp_forward_pass(self, model, input_results, sess):
         """
         inputs
         ------
@@ -27,11 +26,40 @@ class BaseActionInferenceGear(object):
         """
         pass
 
-    def vp_restore_model(self):
+    def vp_restore_model(self, dataset, mode):
+        """
+        outputs
+        -------
+        - model
+        - inputs (iterator.get_next() operation)
+        - sess (tf.Session())
+        """
         pass
 
-    def create_predictions_dataset(self):
-        pass
+    def create_predictions_dataset(self, dataset, mode):
+
+        model, inputs, sess = self.vp_restore_model(dataset, mode)
+
+        num_examples_per_epoch = dataset.num_examples_per_epoch(mode)
+
+        sample_ind = 0
+        while True:
+            if sample_ind >= num_examples_per_epoch:
+                break
+            try:
+                print("evaluation samples from %d to %d" % (sample_ind, sample_ind + dataset.batch_size))
+
+                input_results = sess.run(inputs)
+                gt_actions = input_results['action_targets']
+
+                gen_frames = self.vp_forward_pass(model, input_results, sess)
+
+                # --> function to save tfrecord here
+            except tf.errors.OutOfRangeError:
+                break
+
+        sample_ind += dataset.batch_size
+
 
     def train_inference_model(self, datareader, n_epochs, normalize_targets=False, targets_mean=None, targets_std=None):
 
@@ -91,17 +119,7 @@ class BaseActionInferenceGear(object):
     def evaluate_inference_model(self, datareader):
         """
         """
-        # ===== instance a metrics object
-        metrics = VideoPredictionMetrics(model_name=self.model_name,
-                                         dataset_name=self.dataset_name,
-                                         sequence_length=30,  # --> be careful because I subtract the context frames inside
-                                         context_frames=FLAGS.context_frames)  # --> avoid having FLAGS in this file
-
-        # ===== create a dataset object for the bair predictions of the current model
-        model_dataset_dir = os.path.join(self.dataset_dir, self.model_name)
-
-        # --> split data readers into subcalsses and make a suclass of bair predictoins
-        d = datareader
+        pass
 
     def evaluate_inference_model_online(self):
         pass
