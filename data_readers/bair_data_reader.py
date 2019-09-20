@@ -100,15 +100,22 @@ class BairDataReader(BaseDataReader):
         if FLAGS.use_state:
             state_seq = tf.concat(state_seq, 0)
             action_seq = tf.concat(action_seq, 0)
+
+            states_t = state_seq[:-1, :]
+            states_tp1 = state_seq[1:, :]
+            delta_xy = states_tp1[:, :2] - states_t[:, :2]
             return {'images': image_seq,
                     'actions': action_seq,
-                    'states': state_seq}
+                    'states': state_seq,
+                    'action_targets': delta_xy}
         else:
             zeros_action = tf.zeros([self.sequence_length_to_use, self.ACTION_DIM])
             zeros_state = tf.zeros([self.sequence_length_to_use, self.STATE_DIM])
+            zeros_targets = tf.zeros([self.sequence_length_to_use-1, 2])
             return {'images': image_seq,
                     'actions': zeros_action,
-                    'states': zeros_state}
+                    'states': zeros_state,
+                    'action_targets': zeros_targets}
 
     def num_examples_per_epoch(self, mode):
         """

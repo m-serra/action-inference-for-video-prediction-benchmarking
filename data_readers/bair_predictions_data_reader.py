@@ -79,3 +79,36 @@ class BairPredictionsDataReader(BairDataReader):
         # alternatively, the dataset size can be determined like this, but it's very slow
         # count = sum(sum(1 for _ in tf.python_io.tf_record_iterator(filename)) for filename in filenames)
         return count
+
+    def save_tfrecord_example(self, example_id, gen_images, gt_actions, save_dir):
+        """
+        SOURCE: https://github.com/OliviaMG/xiaomeng/issues/1
+        """
+
+        batch_size = gen_images.get_shape()[0]
+
+        if (example_id % 256 == 0):  # save file of 256 examples
+
+            if not os.path.isdir(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            filename = os.path.join(save_dir,
+                                    'pred_seq_' + str(example_id) + '_to_' + str(example_id + 255) + '.tfrecords')
+            writer = tf.python_io.TFRecordWriter(filename)
+            print('Writing', filename)
+
+        # accumulate examples
+        feature = {}
+        for seq in range(batch_size):
+            pred = gen_images[seq]
+            st = gt_actions[seq, FLAGS.context_frames:]
+
+            # --> Change THIS depending on train/test!!!!!!!!!!!!!!!
+            for index in range(30 - FLAGS.context_frames):
+                image_raw = pred[index].tostring()
+                # encoded_image_string = cv2.imencode('.jpg', traj[index])[1].tostring()
+                # image_raw = tf.compat.as_bytes(encoded_image_string)
+
+                feature['move/' + str(index) + '/image/encoded'] = self._bytes_feature(image_raw)
+                feature['move/' + str(index) + '/state'] = self._float_feature(st[index, :].tolist())
+            example = tf.train.Example(features=tf.train.Features(feature=feature))
+            writer.write(example.SerializeToString())

@@ -2,17 +2,20 @@ import os
 import tensorflow as tf
 from training_flags import FLAGS
 from action_inference.action_inference_model import train_action_inference
+import data_readers
 
 
 class BaseActionInferenceGear(object):
 
-    def __init__(self, model_name, dataset_name, ckpts_dir):
+    def __init__(self, model_name, dataset_name, ckpts_dir, sequence_length):
         self.model_name = model_name
         self.dataset_name = dataset_name
         self.ckpts_dir = ckpts_dir
-        self.model_save_dir = None # --> set this on the function that trains
-        self.seq_len = FLAGS.train_sequence_length
-        self.test_seq_len = FLAGS.test_sequence_length
+        self.model_save_dir = None  # --> set this on the function that trains
+
+        self.context_frames = 2  # --> !!!!!!!!!
+        self.sequence_length = sequence_length  # --> !!!!!!!!!
+        self.n_future = None
 
     def vp_forward_pass(self, model, input_results, sess):
         """
@@ -24,7 +27,7 @@ class BaseActionInferenceGear(object):
         - generated frames
         - ground truth actions
         """
-        pass
+        raise NotImplementedError
 
     def vp_restore_model(self, dataset, mode):
         """
@@ -33,32 +36,36 @@ class BaseActionInferenceGear(object):
         - model
         - inputs (iterator.get_next() operation)
         - sess (tf.Session())
+
         """
-        pass
+        raise NotImplementedError
 
-    def create_predictions_dataset(self, dataset, mode):
+    def create_predictions_dataset(self, original_dataset, mode, predictions_save_dir):
 
-        model, inputs, sess = self.vp_restore_model(dataset, mode)
+        model, inputs, sess = self.vp_restore_model(dataset=original_dataset, mode=mode)
 
-        num_examples_per_epoch = dataset.num_examples_per_epoch(mode)
+        num_examples_per_epoch = original_dataset.num_examples_per_epoch(mode=mode)
+
+        PredictionDatasetClass = data_readers.original_to_prediction_map.get(original_dataset.dataset_name)
 
         sample_ind = 0
         while True:
             if sample_ind >= num_examples_per_epoch:
                 break
             try:
-                print("evaluation samples from %d to %d" % (sample_ind, sample_ind + dataset.batch_size))
+                print("evaluation samples from %d to %d" % (sample_ind, sample_ind + original_dataset.batch_size))
 
                 input_results = sess.run(inputs)
                 gt_actions = input_results['action_targets']
 
                 gen_frames = self.vp_forward_pass(model, input_results, sess)
 
-                # --> function to save tfrecord here
+                PredictionDatasetClass.save_tf_record_example(sample_ind, gen_frames, gt_actions, predictions_save_dir)
+
             except tf.errors.OutOfRangeError:
                 break
 
-        sample_ind += dataset.batch_size
+        sample_ind += original_dataset.batch_size
 
 
     def train_inference_model(self, datareader, n_epochs, normalize_targets=False, targets_mean=None, targets_std=None):
@@ -114,15 +121,15 @@ class BaseActionInferenceGear(object):
                                                 save_path=save_dir)
 
     def train_inference_model_online(self):
-        pass
+        raise NotImplementedError
 
     def evaluate_inference_model(self, datareader):
         """
         """
-        pass
+        raise NotImplementedError
 
     def evaluate_inference_model_online(self):
-        pass
+        raise NotImplementedError
 
     @staticmethod
     def preprocess_data(inputs, shuffle, normalize_targets, targets_mean=None, targets_std=None):
@@ -174,3 +181,11 @@ class BaseActionInferenceGear(object):
             actions = tf.reshape(shuffled_actions, original_actions_shape)
 
         return image_pairs, actions
+
+    @staticmethod
+    def _bytes_feature(value):
+        return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+    @staticmethod
+    def _float_feature(value):
+        return tf.train.Feature(float_list=tf.train.FloatList(value=value))

@@ -119,7 +119,10 @@ class BaseDataReader(object):
         return iterator
 
     def _parse_sequences(self, serialized_example):
-        pass
+        raise NotImplementedError
+
+    def save_tfrecord_example(self, example_id, gen_images, gt_actions, save_dir):
+        raise NotImplementedError
 
     def num_examples_per_epoch(self, mode):
-        pass
+        raise NotImplementedError

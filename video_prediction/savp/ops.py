@@ -1065,7 +1065,7 @@ def get_norm_layer(layer_type):
     elif layer_type == 'layer':
         layer = tf.contrib.layers.layer_norm
     elif layer_type == 'instance':
-        from models.savp.video_prediction.layers import fused_instance_norm
+        from video_prediction.savp.layers import fused_instance_norm
         layer = fused_instance_norm
     elif layer_type == 'none':
         layer = tf.identity
