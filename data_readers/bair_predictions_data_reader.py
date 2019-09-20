@@ -4,6 +4,7 @@ import tensorflow as tf
 from training_flags import FLAGS
 from data_readers.bair_data_reader import BairDataReader
 
+
 class BairPredictionsDataReader(BairDataReader):
 
     def __init__(self,
@@ -80,14 +81,22 @@ class BairPredictionsDataReader(BairDataReader):
         # count = sum(sum(1 for _ in tf.python_io.tf_record_iterator(filename)) for filename in filenames)
         return count
 
-    def save_tfrecord_example(self, example_id, gen_images, gt_actions, save_dir):
+    @staticmethod
+    def save_tfrecord_example(writer, example_id, gen_images, gt_actions, save_dir):
         """
         SOURCE: https://github.com/OliviaMG/xiaomeng/issues/1
         """
 
-        batch_size = gen_images.get_shape()[0]
+        def _bytes_feature(value):
+            return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
-        if (example_id % 256 == 0):  # save file of 256 examples
+        def _float_feature(value):
+            return tf.train.Feature(float_list=tf.train.FloatList(value=value))
+
+        batch_size = gen_images.shape[0]
+
+        print('Example id:', example_id)
+        if example_id % 256 == 0:  # save file of 256 examples
 
             if not os.path.isdir(save_dir):
                 os.makedirs(save_dir, exist_ok=True)
@@ -108,7 +117,10 @@ class BairPredictionsDataReader(BairDataReader):
                 # encoded_image_string = cv2.imencode('.jpg', traj[index])[1].tostring()
                 # image_raw = tf.compat.as_bytes(encoded_image_string)
 
-                feature['move/' + str(index) + '/image/encoded'] = self._bytes_feature(image_raw)
-                feature['move/' + str(index) + '/state'] = self._float_feature(st[index, :].tolist())
+                feature['move/' + str(index) + '/image/encoded'] = _bytes_feature(image_raw)
+                if index < 30 - FLAGS.context_frames - 1:
+                    feature['move/' + str(index) + '/state'] = _float_feature(st[index, :].tolist())
             example = tf.train.Example(features=tf.train.Features(feature=feature))
             writer.write(example.SerializeToString())
+
+        return writer

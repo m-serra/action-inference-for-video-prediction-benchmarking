@@ -18,17 +18,15 @@ class SavpVaeGear(BaseActionInferenceGear):
 
         # input_phs = {k: tf.placeholder(v.dtype, v.shape, '%s_ph' % k) for k, v in inputs.items()}
         # --> this is dataset specific
-        input_phs = {'images': tf.placeholder(inputs['images'].dtype, inputs['images'].shape, 'images_ph'),
-                     'actions': tf.placeholder(inputs['actions'].dtype,
-                                               [batch_size, self.sequence_length-1, 4], 'actions_ph'),
-                     'states': tf.placeholder(inputs['states'].dtype, inputs['states'].shape, 'states_ph')}
+        input_phs = {'images': 'images_ph:0',
+                     'actions': 'actions_ph:0',
+                     'states': 'states_ph:0'}
 
-        feed_dict = {input_ph: inputs[name].as_type(float) for name, input_ph in input_phs.items()}
-        print('IMAGES:')
-        print(feed_dict[input_phs['images']].shape)
+        feed_dict = {input_ph: inputs[name] for name, input_ph in input_phs.items()}
+
         # a little hack because my iterator returns the last time step's action
         feed_dict[input_phs['actions']] = inputs['actions'][:, :-1, :]
-        print(feed_dict.keys())
+
         for stochastic_sample_ind in range(self.num_stochastic_samples):
             gen_images = sess.run(model.outputs['gen_images'], feed_dict=feed_dict)
 
@@ -48,11 +46,6 @@ class SavpVaeGear(BaseActionInferenceGear):
                 dataset_hparams_dict = json.loads(f.read())
         except FileNotFoundError:
             print("dataset_hparams.json was not loaded because it does not exist")
-            print(checkpoint_dir)
-
-        #self.context_frames = dataset_hparams_dict['context_frames']
-        #self.sequence_length = dataset_hparams_dict['sequence_length']
-        #self.n_future = self.sequence_length - self.context_frames
 
         try:
             with open(os.path.join(checkpoint_dir, "model_hparams.json")) as f:

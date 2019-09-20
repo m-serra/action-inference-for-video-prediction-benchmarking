@@ -7,14 +7,14 @@ import data_readers
 
 class BaseActionInferenceGear(object):
 
-    def __init__(self, model_name, dataset_name, ckpts_dir, sequence_length):
+    def __init__(self, model_name, dataset_name, ckpts_dir):
         self.model_name = model_name
         self.dataset_name = dataset_name
         self.ckpts_dir = ckpts_dir
         self.model_save_dir = None  # --> set this on the function that trains
 
-        self.context_frames = 2  # --> !!!!!!!!!
-        self.sequence_length = sequence_length  # --> !!!!!!!!!
+        self.context_frames = None
+        self.sequence_length = None
         self.n_future = None
 
     def vp_forward_pass(self, model, input_results, sess):
@@ -40,7 +40,11 @@ class BaseActionInferenceGear(object):
         """
         raise NotImplementedError
 
-    def create_predictions_dataset(self, original_dataset, mode, predictions_save_dir):
+    def create_predictions_dataset(self, original_dataset, mode, context_frames, sequence_length, predictions_save_dir):
+
+        self.context_frames = context_frames
+        self.sequence_length = sequence_length
+        self.n_future = sequence_length - context_frames
 
         model, inputs, sess = self.vp_restore_model(dataset=original_dataset, mode=mode)
 
@@ -49,6 +53,7 @@ class BaseActionInferenceGear(object):
         PredictionDatasetClass = data_readers.original_to_prediction_map.get(original_dataset.dataset_name)
 
         sample_ind = 0
+        writer = None
         while True:
             if sample_ind >= num_examples_per_epoch:
                 break
@@ -60,13 +65,13 @@ class BaseActionInferenceGear(object):
 
                 gen_frames = self.vp_forward_pass(model, input_results, sess)
 
-                PredictionDatasetClass.save_tf_record_example(sample_ind, gen_frames, gt_actions, predictions_save_dir)
+                writer = PredictionDatasetClass.save_tfrecord_example(writer, sample_ind, gen_frames,
+                                                                      gt_actions, predictions_save_dir)
 
             except tf.errors.OutOfRangeError:
                 break
 
-        sample_ind += original_dataset.batch_size
-
+            sample_ind += original_dataset.batch_size
 
     def train_inference_model(self, datareader, n_epochs, normalize_targets=False, targets_mean=None, targets_std=None):
 
