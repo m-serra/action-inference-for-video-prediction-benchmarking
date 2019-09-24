@@ -1,16 +1,22 @@
 import os
+import numpy as np
 import tensorflow as tf
 from training_flags import FLAGS
 from action_inference.action_inference_model import train_action_inference
 import data_readers
 
+from action_inference.action_inference_model import action_inference_model
+from tensorflow.python.keras.models import Model
+from tensorflow.python.keras.layers import Input
+from metrics import VideoPredictionMetrics
+
 
 class BaseActionInferenceGear(object):
 
-    def __init__(self, model_name, dataset_name, ckpts_dir):
+    def __init__(self, model_name, dataset_name):
         self.model_name = model_name
         self.dataset_name = dataset_name
-        self.ckpts_dir = ckpts_dir  # --> set this on the function that runs vp_model?
+        self.ckpts_dir = None # --> set this on the function that runs vp_model?
         self.model_save_dir = None  # --> set this on the function that trains?
 
         self.context_frames = None
@@ -29,7 +35,7 @@ class BaseActionInferenceGear(object):
         """
         raise NotImplementedError
 
-    def vp_restore_model(self, dataset, mode):
+    def vp_restore_model(self, dataset, mode, ckpts_dir):
         """
         outputs
         -------
@@ -41,14 +47,17 @@ class BaseActionInferenceGear(object):
         raise NotImplementedError
 
     """SEEMS DONE"""
-    def create_predictions_dataset(self, original_dataset, mode, context_frames, sequence_length, predictions_save_dir):
+    def create_predictions_dataset(self, original_dataset, mode, context_frames, sequence_length, predictions_save_dir,
+                                   vp_ckpts_dir):
 
         self.context_frames = context_frames
         self.sequence_length = sequence_length
         self.n_future = sequence_length - context_frames
-        predictions_save_dir = os.path.join(predictions_save_dir, original_dataset.dataset_name, self.model_name, mode)
+        ckpts_dir = os.path.join(vp_ckpts_dir, original_dataset.dataset_name, self.model_name)
+        predictions_save_dir = os.path.join(predictions_save_dir, original_dataset.dataset_name + '_predictions',
+                                            self.model_name, mode)
 
-        model, inputs, sess = self.vp_restore_model(dataset=original_dataset, mode=mode)
+        model, inputs, sess = self.vp_restore_model(dataset=original_dataset, mode=mode, ckpts_dir=ckpts_dir)
 
         num_examples_per_epoch = original_dataset.num_examples_per_epoch(mode=mode)
 
@@ -76,28 +85,27 @@ class BaseActionInferenceGear(object):
 
             sample_ind += original_dataset.batch_size
 
+    """SEEMS DONE"""
     def train_inference_model(self, data_reader, n_epochs, seq_len, model_save_dir, shuffle=True,
                               normalize_targets=False, targets_mean=None, targets_std=None):
 
-        d = data_reader
-
-        save_dir = os.path.join(model_save_dir, d.dataset_name, self.model_name)
+        save_dir = os.path.join(model_save_dir, data_reader.dataset_name, self.model_name)
 
         # ===== Obtain train data and number of iterations
-        train_iterator = d.build_tfrecord_iterator(mode='train')
+        train_iterator = data_reader.build_tfrecord_iterator(mode='train')
         train_inputs = train_iterator.get_next()
 
         if FLAGS.n_iterations is None:
-            train_n_iterations = int(d.num_examples_per_epoch(mode='train')/FLAGS.batch_size)
+            train_n_iterations = int(data_reader.num_examples_per_epoch(mode='train')/FLAGS.batch_size)
         else:
             train_n_iterations = FLAGS.n_iterations
 
         # ===== Obtain validation data and number of iterations
-        val_iterator = d.build_tfrecord_iterator(mode='val')
+        val_iterator = data_reader.build_tfrecord_iterator(mode='val')
         val_inputs = val_iterator.get_next()
 
         if FLAGS.n_iterations is None:
-            val_n_iterations = int(d.num_examples_per_epoch(mode='val') / FLAGS.batch_size)
+            val_n_iterations = int(data_reader.num_examples_per_epoch(mode='val') / FLAGS.batch_size)
         else:
             val_n_iterations = FLAGS.n_iterations
 
@@ -116,9 +124,6 @@ class BaseActionInferenceGear(object):
                                                                    targets_mean=targets_mean,
                                                                    targets_std=targets_std)
 
-        # sess = tf.Session()
-        # sess.run(tf.initialize_all_variables())
-
         # --> allow choice of callbacks
         # ===== Train action inference model
         model, history = train_action_inference(train_image_pairs,
@@ -130,13 +135,95 @@ class BaseActionInferenceGear(object):
                                                 validation_steps=val_n_iterations,
                                                 save_path=save_dir)
 
-    def train_inference_model_online(self):
-        raise NotImplementedError
+    def train_inference_model_online(self, dataset, context_frames, sequence_length, n_epochs, vp_ckpts_dir,
+                                     save_dir, shuffle=True):
+        self.context_frames = context_frames
+        self.sequence_length = sequence_length
+        self.n_future = sequence_length - context_frames
+        ckpts_dir = os.path.join(vp_ckpts_dir, dataset.dataset_name, self.model_name)
 
-    def evaluate_inference_model(self, datareader):
+        model, inputs, sess = self.vp_restore_model(dataset=dataset, mode='train', ckpts_dir=ckpts_dir)
+
+        num_examples_per_epoch = dataset.num_examples_per_epoch(mode='train')
+
+        pred_images = model.outputs['gen_images']
+        gt_actions = inputs['action_targets'][:, -(self.n_future - 1):, :]
+
+        # ===== Preprocess data
+        train_image_pairs, train_action_targets = self.preprocess_data(inputs={'images': pred_images,
+                                                                               'action_targets': gt_actions},
+                                                                       seq_len=self.n_future,
+                                                                       shuffle=shuffle,
+                                                                       normalize_targets=False)
+
+        # ===== Train action inference model
+        # --> add validation
+        model, history = train_action_inference(train_image_pairs,
+                                                train_action_targets,
+                                                epochs=n_epochs,
+                                                steps_per_epoch=num_examples_per_epoch,
+                                                # val_inputs=val_image_pairs,
+                                                # val_targets=val_action_targets,
+                                                # validation_steps=val_n_iterations,
+                                                save_path=save_dir)
+
+
+    def evaluate_inference_model(self, data_reader, seq_len, model_ckpt_dir, results_save_dir, normalize_targets=False,
+                                 targets_mean=None, targets_std=None, plot_results=True):
         """
+        if batch size is more than one iterate the batch dimension
         """
-        raise NotImplementedError
+
+        results_save_dir = os.path.join(results_save_dir, data_reader.dataset_name, self.model_name)
+        model_ckpt_dir = os.path.join(model_ckpt_dir, data_reader.dataset_name, self.model_name)
+
+        # ===== Obtain train data and number of iterations
+        test_iterator = data_reader.build_tfrecord_iterator(mode='test')
+        test_inputs = test_iterator.get_next()
+
+        if FLAGS.n_iterations is None:
+            n_samples = int(data_reader.num_examples_per_epoch(mode='test'))
+        else:
+            n_samples = FLAGS.n_iterations
+
+        # ===== instance metrics class
+        metrics = VideoPredictionMetrics(model_name=self.model_name,
+                                         dataset_name='bair',
+                                         sequence_length=seq_len,
+                                         context_frames=0,  # --> !!!!!!!!!!!!
+                                         save_dir=results_save_dir)
+
+        # ===== preprocess data
+        test_image_pairs, test_action_targets = self.preprocess_data(test_inputs,
+                                                                     seq_len,
+                                                                     shuffle=False,
+                                                                     normalize_targets=normalize_targets,
+                                                                     targets_mean=targets_mean,
+                                                                     targets_std=targets_std)
+
+        # ===== restore the trained inference model
+        model = self.restore_inference_model(test_image_pairs, model_ckpt_dir)
+
+        # ===== forward pass on test set
+        all_pred_seq = np.zeros([n_samples, seq_len - 1, 2])
+        all_gt_seq = np.zeros([n_samples, seq_len - 1, 2])
+
+        sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
+
+        for i in range(n_samples):
+            try:
+                imgs_gt, gt_targets = sess.run([test_image_pairs, test_action_targets])
+                inferred_actions = model.predict(imgs_gt, steps=1)
+
+                all_pred_seq[i] = inferred_actions[-28:]
+                all_gt_seq[i] = gt_targets[-28:]
+
+            except tf.errors.OutOfRangeError:
+                print('end of dataset. %d iterations' % i)
+                break
+
+        metrics.save_inference_metrics(all_gt_seq, all_pred_seq)
 
     def evaluate_inference_model_online(self):
         raise NotImplementedError
@@ -196,10 +283,19 @@ class BaseActionInferenceGear(object):
 
         return image_pairs, actions
 
-    @staticmethod
-    def _bytes_feature(value):
-        return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+    def restore_inference_model(self, input_image_pairs, ckpt_dir):
 
-    @staticmethod
-    def _float_feature(value):
-        return tf.train.Feature(float_list=tf.train.FloatList(value=value))
+        c = input_image_pairs.get_shape()[-1]
+        w = input_image_pairs.get_shape()[-2]
+        h = input_image_pairs.get_shape()[-3]
+        seq_len = input_image_pairs.get_shape()[-4]
+
+        weight_path = os.path.join(ckpt_dir, 'model_weights.h5')
+
+        model_input = Input(shape=(seq_len,  h, w, c))
+        inferred_actions = action_inference_model(model_input)
+
+        model = Model(inputs=model_input, outputs=inferred_actions)
+        model.load_weights(weight_path)
+
+        return model

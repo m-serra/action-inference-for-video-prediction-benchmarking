@@ -81,7 +81,7 @@ class BaseDataReader(object):
 
         Returns:
         --------
-            An iterator that return images, actions, states, distances, angles
+            An iterator that returns images, actions, states, distances, angles
         """
         assert mode in ['train', 'val', 'test'], 'Mode must be one of "train", "val" or "test"'
 

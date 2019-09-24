@@ -28,7 +28,7 @@ class SavpVaeGear(BaseActionInferenceGear):
 
         return gen_images
 
-    def vp_restore_model(self, dataset, mode):
+    def vp_restore_model(self, dataset, mode, ckpts_dir):
         """
         inputs
         ------
@@ -40,17 +40,15 @@ class SavpVaeGear(BaseActionInferenceGear):
         iterator = dataset.build_tfrecord_iterator(mode=mode)
         inputs = iterator.get_next()
 
-        checkpoint_dir = os.path.join(self.ckpts_dir, self.dataset_name, 'savp_vae')
-
         try:
-            with open(os.path.join(checkpoint_dir, "model_hparams.json")) as f:
+            with open(os.path.join(ckpts_dir, "model_hparams.json")) as f:
                 model_hparams_dict = json.loads(f.read())
         except FileNotFoundError:
             print("model_hparams.json was not loaded because it does not exist")
 
         hparams_dict = dict(model_hparams_dict)
 
-        hparams_dict.update({'context_frames': self.context_frames,  # --> this should be written in a .json in the ckpt dir
+        hparams_dict.update({'context_frames': self.context_frames,
                              'sequence_length': self.sequence_length,
                              'repeat': 0})  # --> check what this repeat is
 
@@ -71,16 +69,11 @@ class SavpVaeGear(BaseActionInferenceGear):
         sess = tf.Session(config=config)
         sess.graph.as_default()
 
-        model.restore(sess, checkpoint_dir)
+        model.restore(sess, ckpts_dir)
 
         return model, inputs, sess
 
     def train_inference_model_online(self):
-        raise NotImplementedError
-
-    def evaluate_inference_model(self, datareader):
-        """
-        """
         raise NotImplementedError
 
     def evaluate_inference_model_online(self):

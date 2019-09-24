@@ -21,7 +21,7 @@ class BairPredictionsDataReader(BairDataReader):
         super(BairPredictionsDataReader, self).__init__(*args, **kwargs)
         self.dataset_name = 'bair_predictions'
         self.data_dir = dataset_dir if dataset_dir else FLAGS.bair_predictions_dir
-        self.data_dir = os.path.join(self.data_dir, 'bair', model_name)
+        self.data_dir = os.path.join(self.data_dir, self.dataset_name, model_name)
         self.train_filenames, self.val_filenames, self.test_filenames = self.set_filenames()
 
     def _parse_sequences(self, serialized_example):
@@ -130,7 +130,6 @@ class BairPredictionsDataReader(BairDataReader):
             st = gt_state[seq]
             ac = gt_actions[seq]
 
-            # --> Change THIS depending on train/test!!!!!!!!!!!!!!!
             for index in range(pred_seq_len):
                 image_raw = pred[index].tostring()
                 # encoded_image_string = cv2.imencode('.jpg', traj[index])[1].tostring()
