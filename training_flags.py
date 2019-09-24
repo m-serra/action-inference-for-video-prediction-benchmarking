@@ -54,6 +54,6 @@ flags.DEFINE_integer('use_state', 1,
 flags.DEFINE_integer('num_masks', 10,
                      'number of masks, usually 1 for DNA, 10 for CDNA, STN.')
 flags.DEFINE_integer('scale_factor', 300, 'Scale factor for action prediction exponential regularization term')
-flags.DEFINE_float('K', 0.0001, 'fit vs. regularization tradeoff')
+flags.DEFINE_float('K', 0.0000, 'fit vs. regularization tradeoff')
 
 flags.DEFINE_string('f', '', 'kernel')

@@ -28,6 +28,7 @@ class BairDataReader(BaseDataReader):
 
     def __init__(self,
                  dataset_dir=None,
+                 train_val_split=None,
                  *args,
                  **kwargs):
         """
@@ -46,6 +47,7 @@ class BairDataReader(BaseDataReader):
         self.ORIGINAL_WIDTH = 64
         self.ORIGINAL_HEIGHT = 64
         self.data_dir = dataset_dir if dataset_dir else FLAGS.bair_dir
+        self.train_val_split = train_val_split if train_val_split else FLAGS.train_val_split
         self.train_filenames, self.val_filenames, self.test_filenames = self.set_filenames()
 
     def _parse_sequences(self, serialized_example):

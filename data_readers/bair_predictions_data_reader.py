@@ -8,6 +8,7 @@ from data_readers.bair_data_reader import BairDataReader
 class BairPredictionsDataReader(BairDataReader):
 
     def __init__(self,
+                 model_name,
                  dataset_dir=None,
                  *args,
                  **kwargs):
@@ -20,22 +21,32 @@ class BairPredictionsDataReader(BairDataReader):
         super(BairPredictionsDataReader, self).__init__(*args, **kwargs)
         self.dataset_name = 'bair_predictions'
         self.data_dir = dataset_dir if dataset_dir else FLAGS.bair_predictions_dir
+        self.data_dir = os.path.join(self.data_dir, 'bair', model_name)
         self.train_filenames, self.val_filenames, self.test_filenames = self.set_filenames()
 
-    def _parse_prediction_sequences(self, serialized_example):
-        image_seq, state_seq = [], []
+    def _parse_sequences(self, serialized_example):
+        image_seq, action_target_seq = [], []
+
         for i in range(self.sequence_length_to_use):
 
-            image_name = str(i) + '/image_aux1/encoded'
-            state_name = str(i) + '/endeffector_pos'
+            image_name = str(i) + '/image/encoded'
+            # action_target_name = str(i) + '/action_target'
+            action_target_name = str(i) + '/state_target'
 
+
+            # --> try to find a better solution for this if like a dummy action target at the end of the dataset
+            #if i < self.sequence_length_to_use - 1:
             features = {image_name: tf.FixedLenFeature([1], tf.string),
-                        state_name: tf.FixedLenFeature([self.STATE_DIM], tf.float32)}
+                        action_target_name: tf.FixedLenFeature([3], tf.float32)}  # -->set target action dim instead of 2
+            #else:
+            #    features = {image_name: tf.FixedLenFeature([1], tf.string)}
+
             features = tf.parse_single_example(serialized_example, features=features)
 
             image = tf.decode_raw(features[image_name], float)
-            image = tf.reshape(image, shape=[1, self.IMG_HEIGHT * self.IMG_WIDTH * self.COLOR_CHAN])
-            image = tf.reshape(image, shape=[self.IMG_HEIGHT * self.IMG_WIDTH * self.COLOR_CHAN])
+            image = tf.reshape(image, shape=[1, self.ORIGINAL_HEIGHT * self.ORIGINAL_WIDTH * self.COLOR_CHAN])
+            image = tf.reshape(image, shape=[self.ORIGINAL_HEIGHT, self.ORIGINAL_WIDTH, self.COLOR_CHAN])
+
             assert self.IMG_HEIGHT == self.IMG_WIDTH, 'Unequal height and width unsupported'
 
             crop_size = min(self.ORIGINAL_HEIGHT, self.ORIGINAL_WIDTH)
@@ -45,17 +56,19 @@ class BairPredictionsDataReader(BairDataReader):
             # image = tf.cast(image, tf.float32) / 255.0
             image_seq.append(image)
 
-            state = tf.reshape(features[state_name], shape=[1, self.STATE_DIM])
-            state_seq.append(state)
+            # --> try to find a better solution for this if like a dummy action target at the end of the dataset
+            # if i < self.sequence_length_to_use - 1:
+            state = tf.reshape(features[action_target_name], shape=[1, 3])  # -->set target action dim instead of 2
+            action_target_seq.append(state)
 
         image_seq = tf.concat(image_seq, 0)
+        action_target_seq = tf.concat(action_target_seq, 0)
 
-        state_seq = tf.concat(state_seq, 0)
-        states_t = state_seq[:-1, :]
-        states_tp1 = state_seq[1:, :]
-        delta_xy = states_tp1[:, :2] - states_t[:, :2]
+        actions_t = action_target_seq[:-1, :]
+        actions_tp1 = action_target_seq[1:, :]
+        action_target_seq = actions_tp1[:, :2] - actions_t[:, :2]
 
-        return {'images': image_seq, 'action_targets': delta_xy}
+        return {'images': image_seq, 'action_targets': action_target_seq}
 
     def num_examples_per_epoch(self, mode):
         """
@@ -82,9 +95,14 @@ class BairPredictionsDataReader(BairDataReader):
         return count
 
     @staticmethod
-    def save_tfrecord_example(writer, example_id, gen_images, gt_actions, save_dir):
+    def save_tfrecord_example(writer, example_id, gen_images, gt_actions, gt_state, save_dir):
         """
         SOURCE: https://github.com/OliviaMG/xiaomeng/issues/1
+
+        inputs
+        ------
+        - gen_images: (batch_size, future_length, h, w, c)
+        - gt_actions: (batch_size, future_length-1, dim)
         """
 
         def _bytes_feature(value):
@@ -94,8 +112,8 @@ class BairPredictionsDataReader(BairDataReader):
             return tf.train.Feature(float_list=tf.train.FloatList(value=value))
 
         batch_size = gen_images.shape[0]
+        pred_seq_len = gen_images.shape[1]
 
-        print('Example id:', example_id)
         if example_id % 256 == 0:  # save file of 256 examples
 
             if not os.path.isdir(save_dir):
@@ -109,17 +127,21 @@ class BairPredictionsDataReader(BairDataReader):
         feature = {}
         for seq in range(batch_size):
             pred = gen_images[seq]
-            st = gt_actions[seq, FLAGS.context_frames:]
+            st = gt_state[seq]
+            ac = gt_actions[seq]
 
             # --> Change THIS depending on train/test!!!!!!!!!!!!!!!
-            for index in range(30 - FLAGS.context_frames):
+            for index in range(pred_seq_len):
                 image_raw = pred[index].tostring()
                 # encoded_image_string = cv2.imencode('.jpg', traj[index])[1].tostring()
                 # image_raw = tf.compat.as_bytes(encoded_image_string)
 
-                feature['move/' + str(index) + '/image/encoded'] = _bytes_feature(image_raw)
-                if index < 30 - FLAGS.context_frames - 1:
-                    feature['move/' + str(index) + '/state'] = _float_feature(st[index, :].tolist())
+                feature[str(index) + '/image/encoded'] = _bytes_feature(image_raw)
+                feature[str(index) + '/state_target'] = _float_feature(st[index, :].tolist())
+                # because actions are considered to be "between frames" there is one less action than frames
+                if index < pred_seq_len - 1:
+                    feature[str(index) + '/action_target'] = _float_feature(ac[index, :].tolist())
+
             example = tf.train.Example(features=tf.train.Features(feature=feature))
             writer.write(example.SerializeToString())
 

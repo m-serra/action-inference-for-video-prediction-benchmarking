@@ -122,7 +122,7 @@ class BaseDataReader(object):
         raise NotImplementedError
 
     @staticmethod
-    def save_tfrecord_example(writer, example_id, gen_images, gt_actions, save_dir):
+    def save_tfrecord_example(writer, example_id, gen_images, gt_actions, gt_state, save_dir):
         raise NotImplementedError
 
     def num_examples_per_epoch(self, mode):

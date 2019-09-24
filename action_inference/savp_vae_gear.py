@@ -14,38 +14,33 @@ class SavpVaeGear(BaseActionInferenceGear):
     def vp_forward_pass(self, model, inputs, sess):
         """
         """
-        batch_size = inputs['images'].shape[0]
+        # batch_size = inputs['images'].shape[0]
 
         # input_phs = {k: tf.placeholder(v.dtype, v.shape, '%s_ph' % k) for k, v in inputs.items()}
         # --> this is dataset specific
-        input_phs = {'images': 'images_ph:0',
-                     'actions': 'actions_ph:0',
-                     'states': 'states_ph:0'}
-
-        feed_dict = {input_ph: inputs[name] for name, input_ph in input_phs.items()}
-
-        # a little hack because my iterator returns the last time step's action
-        feed_dict[input_phs['actions']] = inputs['actions'][:, :-1, :]
+        feed_dict = {'images_ph:0': inputs['images'],
+                     'actions_ph:0': inputs['actions'][:, :-1, :],
+                     'states_ph:0': inputs['states']}
 
         for stochastic_sample_ind in range(self.num_stochastic_samples):
             gen_images = sess.run(model.outputs['gen_images'], feed_dict=feed_dict)
+            gen_images = gen_images[:, -self.n_future:]
 
         return gen_images
 
     def vp_restore_model(self, dataset, mode):
-
+        """
+        inputs
+        ------
+        - mode: controls whether the data that will be fed to the model comes from the 'train' or 'test' set. Doesn't
+                control in which mode the model is used, which is always 'test', that is, learning rate = 0
+        """
         gpu_mem_frac = 0  # --> check what this does
 
-        iterator = dataset.build_tfrecord_iterator(mode='test')
+        iterator = dataset.build_tfrecord_iterator(mode=mode)
         inputs = iterator.get_next()
 
         checkpoint_dir = os.path.join(self.ckpts_dir, self.dataset_name, 'savp_vae')
-
-        try:
-            with open(os.path.join(checkpoint_dir, "dataset_hparams.json")) as f:
-                dataset_hparams_dict = json.loads(f.read())
-        except FileNotFoundError:
-            print("dataset_hparams.json was not loaded because it does not exist")
 
         try:
             with open(os.path.join(checkpoint_dir, "model_hparams.json")) as f:
@@ -59,7 +54,7 @@ class SavpVaeGear(BaseActionInferenceGear):
                              'sequence_length': self.sequence_length,
                              'repeat': 0})  # --> check what this repeat is
 
-        model = SAVPVideoPredictionModel(mode=mode, hparams_dict=hparams_dict)
+        model = SAVPVideoPredictionModel(mode='test', hparams_dict=hparams_dict)
 
         # input_phs = {k: tf.placeholder(v.dtype, v.shape, '%s_ph' % k) for k, v in inputs.items()}
         # --> this is dataset specific
