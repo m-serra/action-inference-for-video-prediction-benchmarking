@@ -1,7 +1,11 @@
 from __future__ import absolute_import
 import os
+from data_readers.bair_data_reader import BairDataReader
+from training_flags import FLAGS
 from data_readers.bair_predictions_data_reader import BairPredictionsDataReader
-from action_inference.savp_vae_gear import SavpVaeGear
+from action_inference.savp_models_gear import SAVPModelsGear
+from action_inference.cdna_gear import CDNAGear
+from action_inference.svg_gear import SVGGear
 
 """
 export PYTHONPATH="${PYTHONPATH}:~/Tese/action-inference-for-video-prediction-benchmarking"
@@ -12,10 +16,14 @@ def main():
 
     # --> allow seq_len to be None and by default use maximum possible sequence
 
-    model_list = ['savp']
+    model_list = ['svg']
 
-    gear_map = {'savp': SavpVaeGear,
-                'savp_vae': SavpVaeGear}
+    gear_map = {'savp': SAVPModelsGear,
+                'savp_vae': SAVPModelsGear,
+                'savp_gan': SAVPModelsGear,
+                'sv2p': SAVPModelsGear,
+                'cdna': CDNAGear,
+                'svg': SVGGear}
 
     for model_name in model_list:
 
@@ -41,6 +49,24 @@ def main():
                                  model_save_dir=os.path.join(os.path.expanduser('~/'),
                                                              'Tese/action-inference-for-video-prediction-benchmarking/',
                                                              'pretrained_inference_models'))
+
+        # d = BairDataReader(dataset_dir=FLAGS.bair_dir,
+        #                    batch_size=8,
+        #                    sequence_length_train=30,
+        #                    sequence_length_test=30,
+        #                    shuffle=False,
+        #                    dataset_repeat=None)  # --> maybe add something for dataset repeat=1 if mode 'test'
+        #
+        # ai.train_inference_model_online(dataset=d,
+        #                                 context_frames=2,
+        #                                 sequence_length=30,
+        #                                 n_epochs=2,
+        #                                 vp_ckpts_dir=os.path.join(os.path.expanduser('~/'),
+        #                                   'Tese/action-inference-for-video-prediction-benchmarking/pretrained_models'),
+        #                                 model_save_dir=os.path.join(os.path.expanduser('~/'),
+        #                                                     'Tese/action-inference-for-video-prediction-benchmarking/',
+        #                                                     'pretrained_inference_models')
+        #                                 )
 
 
 if __name__ == '__main__':

@@ -29,9 +29,10 @@ class VideoPredictionMetrics(object):
         self.total_square_fvd = 0
         self.n_examples = 0
         self.batch_size = None
-        
-        self.all_gt_videos = np.zeros([32, self.future_length, 64, 64, 3])
-        self.all_pred_videos = np.zeros([32, self.future_length, 64, 64, 3])
+
+        self.fvd_batch_size = 32
+        self.all_gt_videos = np.zeros([self.fvd_batch_size, self.future_length, 64, 64, 3])
+        self.all_pred_videos = np.zeros([self.fvd_batch_size, self.future_length, 64, 64, 3])
         
         if self.model_name == 'ours_savp':
             model_name = 'savp'
@@ -43,13 +44,18 @@ class VideoPredictionMetrics(object):
         self.save_dir = save_dir
         
         # ===== FVD op
-        gen = tf.placeholder(dtype=tf.float32, shape=(32, 28, 64, 64, 3), name='gen')
-        true = tf.placeholder(dtype=tf.float32, shape=(32, 28, 64, 64, 3), name='true')
-        
+        # added this because of an error: https://github.com/tensorflow/tensorflow/issues/6698
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        config.gpu_options.per_process_gpu_memory_fraction = 0.85
+
+        gen = tf.placeholder(dtype=tf.float32, shape=(self.fvd_batch_size, 28, 64, 64, 3), name='gen')
+        true = tf.placeholder(dtype=tf.float32, shape=(self.fvd_batch_size, 28, 64, 64, 3), name='true')
+
         self.fvd_op = fvd.calculate_fvd(fvd.create_id3_embedding(fvd.preprocess(true, (224, 224))),
                                         fvd.create_id3_embedding(fvd.preprocess(gen, (224, 224))))
 
-        self.sess = tf.Session()
+        self.sess = tf.Session(config=config)
         self.sess.run(tf.global_variables_initializer())
         self.fvd_list = np.zeros(8)
 
@@ -78,19 +84,21 @@ class VideoPredictionMetrics(object):
         self.total_square_ssim_by_step = self.total_square_ssim_by_step + np.sum(np.square(ssim_by_step), axis=0)
        
         # ==== Register the videos
-        self.all_gt_videos[(self.n_examples % 32):(self.n_examples % 32)+8] = context_images_future
-        self.all_pred_videos[(self.n_examples % 32):(self.n_examples % 32)+8] = gen_images
+        self.all_gt_videos[(self.n_examples % self.fvd_batch_size):(self.n_examples % self.fvd_batch_size)+8] = \
+                                                                                                context_images_future
+        self.all_pred_videos[(self.n_examples % self.fvd_batch_size):(self.n_examples % self.fvd_batch_size)+8] = \
+                                                                                                gen_images
         self.n_examples += self.batch_size
         
         # ===== FVD
-        if self.n_examples%32 == 0:
+        if self.n_examples % self.fvd_batch_size == 0:
             fvd_val = self.sess.run(self.fvd_op, {'gen:0': self.all_pred_videos*255, 
                                                   'true:0': self.all_gt_videos*255}) 
 
-            self.fvd_list[int(self.n_examples/32)-1] = fvd_val 
+            self.fvd_list[int(self.n_examples/self.fvd_batch_size)-1] = fvd_val
             
-            self.all_gt_videos=np.zeros([32, self.future_length, 64, 64, 3])
-            self.all_pred_videos=np.zeros([32, self.future_length, 64, 64, 3])
+            self.all_gt_videos = np.zeros([self.fvd_batch_size, self.future_length, 64, 64, 3])
+            self.all_pred_videos = np.zeros([self.fvd_batch_size, self.future_length, 64, 64, 3])
 
     def save_metrics(self):
         

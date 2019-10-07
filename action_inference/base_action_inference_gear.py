@@ -16,14 +16,14 @@ class BaseActionInferenceGear(object):
     def __init__(self, model_name, dataset_name):
         self.model_name = model_name
         self.dataset_name = dataset_name
-        self.ckpts_dir = None # --> set this on the function that runs vp_model?
+        self.ckpts_dir = None  # --> set this on the function that runs vp_model?
         self.model_save_dir = None  # --> set this on the function that trains?
 
         self.context_frames = None
         self.sequence_length = None
         self.n_future = None
 
-    def vp_forward_pass(self, model, input_results, sess):
+    def vp_forward_pass(self, model, input_results, sess, mode=None, feeds=None):
         """
         inputs
         ------
@@ -57,7 +57,7 @@ class BaseActionInferenceGear(object):
         predictions_save_dir = os.path.join(predictions_save_dir, original_dataset.dataset_name + '_predictions',
                                             self.model_name, mode)
 
-        model, inputs, sess = self.vp_restore_model(dataset=original_dataset, mode=mode, ckpts_dir=ckpts_dir)
+        model, inputs, sess, feeds = self.vp_restore_model(dataset=original_dataset, mode=mode, ckpts_dir=ckpts_dir)
 
         num_examples_per_epoch = original_dataset.num_examples_per_epoch(mode=mode)
 
@@ -70,15 +70,12 @@ class BaseActionInferenceGear(object):
                 break
             try:
                 print("saving samples from %d to %d" % (sample_ind, sample_ind + original_dataset.batch_size))
-
-                input_results = sess.run(inputs)
-                gt_actions = input_results['action_targets'][:, -(self.n_future-1):, :]
-                gt_states = input_results['states'][:, -self.n_future:, :]
-
-                gen_frames = self.vp_forward_pass(model, input_results, sess)
+                # in the future replace states by actions for generality
+                # gen_frames, gt_actions = self.vp_forward_pass(model, inputs, sess, mode, feeds)
+                gen_frames, _, gt_states = self.vp_forward_pass(model, inputs, sess, mode, feeds)
 
                 writer = PredictionDatasetClass.save_tfrecord_example(writer, sample_ind, gen_frames,
-                                                                      gt_actions, gt_states, predictions_save_dir)
+                                                                      gt_states, predictions_save_dir)
 
             except tf.errors.OutOfRangeError:
                 break
@@ -135,13 +132,14 @@ class BaseActionInferenceGear(object):
                                                 validation_steps=val_n_iterations,
                                                 save_path=save_dir)
 
+    """Not finished"""
     def train_inference_model_online(self, dataset, context_frames, sequence_length, n_epochs, vp_ckpts_dir,
-                                     save_dir, shuffle=True):
+                                     model_save_dir, shuffle=True):
         self.context_frames = context_frames
         self.sequence_length = sequence_length
         self.n_future = sequence_length - context_frames
         ckpts_dir = os.path.join(vp_ckpts_dir, dataset.dataset_name, self.model_name)
-
+        model_save_dir = os.path.join(vp_ckpts_dir, dataset.dataset_name, 'savp_online')
         model, inputs, sess = self.vp_restore_model(dataset=dataset, mode='train', ckpts_dir=ckpts_dir)
 
         num_examples_per_epoch = dataset.num_examples_per_epoch(mode='train')
@@ -165,7 +163,7 @@ class BaseActionInferenceGear(object):
                                                 # val_inputs=val_image_pairs,
                                                 # val_targets=val_action_targets,
                                                 # validation_steps=val_n_iterations,
-                                                save_path=save_dir)
+                                                save_path=model_save_dir)
 
 
     def evaluate_inference_model(self, data_reader, seq_len, model_ckpt_dir, results_save_dir, normalize_targets=False,
@@ -188,7 +186,7 @@ class BaseActionInferenceGear(object):
 
         # ===== instance metrics class
         metrics = VideoPredictionMetrics(model_name=self.model_name,
-                                         dataset_name='bair',
+                                         dataset_name=data_reader.dataset_name,
                                          sequence_length=seq_len,
                                          context_frames=0,  # --> !!!!!!!!!!!!
                                          save_dir=results_save_dir)
@@ -252,7 +250,6 @@ class BaseActionInferenceGear(object):
         if normalize_targets:
             assert (targets_mean or targets_std) is not None, \
                 'If normalize_data is True data_mean and data_std must be provided'
-
             # normalize targets by the standard deviation and mean of the respective time step
             std = targets_std[-paired_seq_len:]
             mean = targets_mean[-paired_seq_len:]
@@ -299,3 +296,40 @@ class BaseActionInferenceGear(object):
         model.load_weights(weight_path)
 
         return model
+
+    def evaluate_vp_model(self, data_reader, context_frames, sequence_length, vp_ckpts_dir, results_dir):
+
+        self.context_frames = context_frames
+        self.sequence_length = sequence_length
+        self.n_future = sequence_length - context_frames
+        ckpts_dir = os.path.join(vp_ckpts_dir, data_reader.dataset_name, self.model_name)
+        results_dir = os.path.join(results_dir, data_reader.dataset_name, self.model_name)
+
+        model, inputs, sess, feeds = self.vp_restore_model(dataset=data_reader, mode='test', ckpts_dir=ckpts_dir)
+
+        num_examples_per_epoch = data_reader.num_examples_per_epoch(mode='test')
+
+        metrics = VideoPredictionMetrics(model_name=self.model_name,
+                                         dataset_name=data_reader.dataset_name,
+                                         sequence_length=sequence_length,
+                                         context_frames=context_frames,
+                                         save_dir=results_dir)
+
+        sample_ind = 0
+        while True:
+            if sample_ind >= num_examples_per_epoch:
+                break
+            try:
+                print("evaluating samples from %d to %d" % (sample_ind, sample_ind + data_reader.batch_size))
+
+                gen_frames, gt_frames, _ = self.vp_forward_pass(model, inputs, sess, feeds=feeds, mode='test')
+
+                metrics.update_metrics_values(context_images=gt_frames,
+                                              gen_images=gen_frames)
+
+            except tf.errors.OutOfRangeError:
+                break
+
+            sample_ind += data_reader.batch_size
+
+        metrics.save_metrics()

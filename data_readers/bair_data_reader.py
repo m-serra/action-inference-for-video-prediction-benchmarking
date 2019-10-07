@@ -19,7 +19,10 @@
 
 import os
 import re
+import pickle
+import numpy as np
 import tensorflow as tf
+from scipy.misc import imread
 from training_flags import FLAGS
 from .base_data_reader import BaseDataReader
 
@@ -28,6 +31,7 @@ class BairDataReader(BaseDataReader):
 
     def __init__(self,
                  dataset_dir=None,
+                 processed_dataset_dir=None,
                  train_val_split=None,
                  *args,
                  **kwargs):
@@ -49,6 +53,21 @@ class BairDataReader(BaseDataReader):
         self.data_dir = dataset_dir if dataset_dir else FLAGS.bair_dir
         self.train_val_split = train_val_split if train_val_split else FLAGS.train_val_split
         self.train_filenames, self.val_filenames, self.test_filenames = self.set_filenames()
+        self.processed_dataset_dir = processed_dataset_dir
+        self.mode = None
+        self.seed_is_set = False
+
+        if self.processed_dataset_dir:
+            self.dirs = {'train': [], 'test': []}
+            self.d = 0
+
+            for mode in ['train', 'test']:
+                dir_ = os.path.join(self.processed_dataset_dir, mode)
+                for d1 in os.listdir(dir_):
+                    for d2 in os.listdir('%s/%s' % (dir_, d1)):
+                        self.dirs[mode].append('%s/%s/%s' % (dir_, d1, d2))
+                        if mode == 'train' and self.shuffle:
+                            np.random.shuffle(self.dirs[mode])
 
     def _parse_sequences(self, serialized_example):
 
@@ -119,6 +138,9 @@ class BairDataReader(BaseDataReader):
                     'states': zeros_state,
                     'action_targets': zeros_targets}
 
+    def set_mode(self, mode):
+        self.mode = mode
+
     def num_examples_per_epoch(self, mode):
         """
         SOURCE:
@@ -142,3 +164,59 @@ class BairDataReader(BaseDataReader):
         # alternatively, the dataset size can be determined like this, but it's very slow
         # count = sum(sum(1 for _ in tf.python_io.tf_record_iterator(filename)) for filename in filenames)
         return count
+
+    """
+    The following methods are for this class to be used with PyTorch DataLoader, which receives a map style dataset
+    implementing the __getitem__ and __len__ methods
+    """
+
+    def __len__(self):
+        return self.num_examples_per_epoch(self.mode)
+
+    def __getitem__(self, index):
+        self.set_seed(index)
+        return self.get_seq()
+
+    def set_seed(self, seed):
+        if not self.seed_is_set:
+            self.seed_is_set = True
+            np.random.seed(seed)
+
+    def get_seq(self):
+        """
+        Mode must be set beforehand.
+        When instantiating the class data_dir should be a folder where all sub folders seq_#_to_## are located
+        """
+
+        if self.mode in ['train', 'val']:
+            self.sequence_length_to_use = self.sequence_length_train
+            dirs = self.dirs['train']
+        else:
+            self.sequence_length_to_use = self.sequence_length_test
+            dirs = self.dirs['test']
+
+        sequence_dir = dirs[self.d]
+        if self.d == len(dirs) - 1:
+            self.d = 0
+        else:
+            self.d += 1
+
+        image_seq = []
+        for i in range(self.sequence_length_to_use):
+            fname = '%s/%d.png' % (sequence_dir, i)
+            im = imread(fname).reshape(1, self.IMG_HEIGHT, self.IMG_WIDTH, self.COLOR_CHAN)
+            image_seq.append(im / 255.)
+        image_seq = np.concatenate(image_seq, axis=0)
+
+        with open('%s/state.pickle' % sequence_dir, 'rb') as f:
+            state_seq = pickle.load(f)
+
+        with open('%s/action.pickle' % sequence_dir, 'rb') as f:
+            action_seq = pickle.load(f)
+
+        states_t = state_seq[:-1, :]
+        states_tp1 = state_seq[1:, :]
+        delta_xy = states_tp1[:, :2] - states_t[:, :2]
+
+        return {'images': image_seq, 'actions': action_seq, 'states': state_seq, 'action_targets': delta_xy}
+

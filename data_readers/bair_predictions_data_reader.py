@@ -30,7 +30,7 @@ class BairPredictionsDataReader(BairDataReader):
         for i in range(self.sequence_length_to_use):
 
             image_name = str(i) + '/image/encoded'
-            # action_target_name = str(i) + '/action_target'
+            # action_target_name = str(i) + '/action_target' # --> change state for actions
             action_target_name = str(i) + '/state_target'
 
 
@@ -38,7 +38,7 @@ class BairPredictionsDataReader(BairDataReader):
             #if i < self.sequence_length_to_use - 1:
             features = {image_name: tf.FixedLenFeature([1], tf.string),
                         action_target_name: tf.FixedLenFeature([3], tf.float32)}  # -->set target action dim instead of 2
-            #else:
+            # else:
             #    features = {image_name: tf.FixedLenFeature([1], tf.string)}
 
             features = tf.parse_single_example(serialized_example, features=features)
@@ -95,7 +95,8 @@ class BairPredictionsDataReader(BairDataReader):
         return count
 
     @staticmethod
-    def save_tfrecord_example(writer, example_id, gen_images, gt_actions, gt_state, save_dir):
+    # in the future replace state by actions for generality
+    def save_tfrecord_example(writer, example_id, gen_images, gt_state, save_dir):
         """
         SOURCE: https://github.com/OliviaMG/xiaomeng/issues/1
 
@@ -128,7 +129,7 @@ class BairPredictionsDataReader(BairDataReader):
         for seq in range(batch_size):
             pred = gen_images[seq]
             st = gt_state[seq]
-            ac = gt_actions[seq]
+            # ac = gt_actions[seq]  # --> in the future replace state by actions
 
             for index in range(pred_seq_len):
                 image_raw = pred[index].tostring()
@@ -136,10 +137,10 @@ class BairPredictionsDataReader(BairDataReader):
                 # image_raw = tf.compat.as_bytes(encoded_image_string)
 
                 feature[str(index) + '/image/encoded'] = _bytes_feature(image_raw)
-                feature[str(index) + '/state_target'] = _float_feature(st[index, :].tolist())
+                feature[str(index) + '/state_target'] = _float_feature(st[index, :].tolist())  # --> replace
                 # because actions are considered to be "between frames" there is one less action than frames
-                if index < pred_seq_len - 1:
-                    feature[str(index) + '/action_target'] = _float_feature(ac[index, :].tolist())
+                # if index < pred_seq_len - 1:  # --> in the future replace state by actions
+                #    feature[str(index) + '/action_target'] = _float_feature(ac[index, :].tolist())
 
             example = tf.train.Example(features=tf.train.Features(feature=feature))
             writer.write(example.SerializeToString())
