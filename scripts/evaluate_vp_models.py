@@ -47,7 +47,6 @@ def main():
                         dataset_name='bair')
 
         ai.evaluate_vp_model(data_reader=d,
-                             sequence_length=30,
                              context_frames=2,
                              vp_ckpts_dir=os.path.join(os.path.expanduser('~/'),
                                                 'Tese/action-inference-for-video-prediction-benchmarking/pretrained_models'),

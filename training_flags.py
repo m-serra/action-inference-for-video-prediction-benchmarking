@@ -1,7 +1,7 @@
 import os, datetime
 from tensorflow.python.platform import flags
 
-DATASET = 'BAIR' # either 'BAIR' or 'GooglePush'
+DATASET = 'BAIR'
 ARCH = 'CDNA'
 VAL_INTERVAL = 10
 SUMMARY_INTERVAL = 50

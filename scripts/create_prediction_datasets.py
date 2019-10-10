@@ -44,8 +44,7 @@ def main():
 
             gear_class = gear_map.get(model_name)
 
-            ai = gear_class(model_name=model_name,
-                            dataset_name='bair')
+            ai = gear_class(model_name=model_name)
 
             predictions_save_dir = os.path.join(
                                     os.path.expanduser('~/'),
@@ -54,7 +53,6 @@ def main():
             ai.create_predictions_dataset(original_dataset=d,
                                           mode=mode,
                                           context_frames=2,
-                                          sequence_length=30,
                                           predictions_save_dir=predictions_save_dir,
                                           vp_ckpts_dir=os.path.join(os.path.expanduser('~/'),
                                               'Tese/action-inference-for-video-prediction-benchmarking/pretrained_models'))

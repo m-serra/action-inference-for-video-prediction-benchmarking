@@ -44,7 +44,6 @@ def main():
                                            model_name=model_name)
 
         ai.evaluate_inference_model(d_pred,
-                                    seq_len=28,
                                     model_ckpt_dir=os.path.join(os.path.expanduser('~/'),
                                                 'Tese/action-inference-for-video-prediction-benchmarking/pretrained_inference_models'),
                                     results_save_dir=os.path.join(os.path.expanduser('~/'),
