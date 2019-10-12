@@ -23,7 +23,6 @@ import pickle
 import numpy as np
 import tensorflow as tf
 from scipy.misc import imread
-from training_flags import FLAGS
 from .base_data_reader import BaseDataReader
 
 
@@ -32,7 +31,8 @@ class BairDataReader(BaseDataReader):
     def __init__(self,
                  dataset_dir=None,
                  processed_dataset_dir=None,
-                 train_val_split=None,
+                 train_val_split=0.9,
+                 use_state=1,
                  *args,
                  **kwargs):
         """
@@ -50,12 +50,14 @@ class BairDataReader(BaseDataReader):
         self.ACTION_DIM = 4
         self.ORIGINAL_WIDTH = 64
         self.ORIGINAL_HEIGHT = 64
-        self.data_dir = dataset_dir if dataset_dir else FLAGS.bair_dir
-        self.train_val_split = train_val_split if train_val_split else FLAGS.train_val_split
-        self.train_filenames, self.val_filenames, self.test_filenames = self.set_filenames()
+        self.data_dir = dataset_dir
+        self.train_val_split = train_val_split
+        if self.data_dir is not None:
+            self.train_filenames, self.val_filenames, self.test_filenames = self.set_filenames()
         self.processed_dataset_dir = processed_dataset_dir
         self.mode = None
         self.seed_is_set = False
+        self.use_state = use_state
 
         if self.processed_dataset_dir:
             self.dirs = {'train': [], 'test': []}
@@ -108,7 +110,7 @@ class BairDataReader(BaseDataReader):
             # add the new frame to a list with a sequence of frames. shape: seq_len*(1, 64, 64, 3)
             image_seq.append(image)
 
-            if FLAGS.use_state:
+            if self.use_state:
                 state = tf.reshape(features[state_name], shape=[1, self.STATE_DIM])
                 state_seq.append(state)
 
@@ -118,7 +120,7 @@ class BairDataReader(BaseDataReader):
         # stack the list of frames in a single tensor. shape: (seq_len, 64, 64, 3)
         image_seq = tf.concat(image_seq, 0)
 
-        if FLAGS.use_state:
+        if self.use_state:
             state_seq = tf.concat(state_seq, 0)
             action_seq = tf.concat(action_seq, 0)
 
@@ -220,3 +222,6 @@ class BairDataReader(BaseDataReader):
 
         return {'images': image_seq, 'actions': action_seq, 'states': state_seq, 'action_targets': delta_xy}
 
+    @staticmethod
+    def save_tfrecord_example(writer, example_id, gen_images, gt_state, save_dir):
+        raise NotImplementedError

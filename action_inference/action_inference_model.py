@@ -7,7 +7,6 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import l2
 from keras.losses import mean_absolute_error
-from training_flags import FLAGS
 
 tf.logging.set_verbosity(tf.logging.ERROR)
 
@@ -107,10 +106,8 @@ def regularization(x, scale_factor=1):
     return tf.reduce_sum(tf.exp(tf.abs(x_tp1 - x_t)) ** (-scale_factor))
 
 
-def regularized_mean_absolute_error(y_true, y_pred, K=0.00000):
-    K = K if FLAGS.K is None else FLAGS.K
-    scale_factor = 300 if FLAGS.scale_factor is None else FLAGS.scale_factor
-    return mean_absolute_error(y_true, y_pred) + K * regularization(y_pred, scale_factor=300)
+def regularized_mean_absolute_error(y_true, y_pred, k=0.0):
+    return mean_absolute_error(y_true, y_pred) + k * regularization(y_pred, scale_factor=300)
 
 
 def train_action_inference(inputs, targets, epochs=1, steps_per_epoch=1000, print_layer_sizes=True,
@@ -126,7 +123,7 @@ def train_action_inference(inputs, targets, epochs=1, steps_per_epoch=1000, prin
     model = Model(model_input, actions)
 
     model.compile(optimizer=optimizer,
-                  loss=regularized_mean_absolute_error,
+                  loss=mean_absolute_error,
                   target_tensors=targets)
 
     if print_layer_sizes is True:

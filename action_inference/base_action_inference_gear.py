@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import tensorflow as tf
-from training_flags import FLAGS
 from action_inference.action_inference_model import train_action_inference
 import data_readers
 
@@ -145,8 +144,8 @@ class BaseActionInferenceGear(object):
         - data_reader (object): an object of a subclass of BaseDataReader
         - model_save_dir (str): directory where the trained model checkpoint will be saved
         - n_epochs (int): number of times the dataset will be passed for training.
-        - train_num_examples (int): number of examples to train on. If None the whole dataset will be used.
-        - val_num_examples (int): number of examples to validate on. If None the whole dataset will be used.
+        - train_num_examples (int): number of examples to train on. If None the whole train dataset will be used.
+        - val_num_examples (int): number of examples to validate on. If None the whole val dataset will be used.
         """
 
         self.sequence_length = data_reader.sequence_length_train
@@ -375,11 +374,11 @@ class BaseActionInferenceGear(object):
         batch_size = inputs['images'].get_shape()[-5]
 
         # ===== Pair every two consecutive images
-        images_t = tf.slice(inputs['images'][:, -sequence_length:], (0, 0, 0, 0, 0), (-1, paired_seq_len, height, width, channels))
-        images_tp1 = tf.slice(inputs['images'][:, -sequence_length:], (0, 1, 0, 0, 0), (-1, paired_seq_len, height, width, channels))
+        images_t = tf.slice(inputs['images'], (0, 0, 0, 0, 0), (-1, paired_seq_len, height, width, channels))
+        images_tp1 = tf.slice(inputs['images'], (0, 1, 0, 0, 0), (-1, paired_seq_len, height, width, channels))
         image_pairs = tf.concat([images_t, images_tp1], axis=-1)
 
-        action_pairs = inputs['action_targets'][:, -paired_seq_len:]
+        action_pairs = inputs['action_targets']
         action_size = inputs['action_targets'].get_shape()[-1]
 
         # ===== Shuffle data

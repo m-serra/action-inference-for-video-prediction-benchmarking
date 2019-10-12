@@ -1,7 +1,6 @@
 import re
 import os
 import tensorflow as tf
-from training_flags import FLAGS
 from data_readers.bair_data_reader import BairDataReader
 
 
@@ -9,20 +8,22 @@ class BairPredictionsDataReader(BairDataReader):
 
     def __init__(self,
                  model_name,
-                 dataset_dir=None,
+                 dataset_dir,
                  *args,
                  **kwargs):
         """
         Dataset class for the BAIR and Google Push datasets.
-        :param dataset_dir: (str, optional) path to dataset directory, containing the /train and a /test directories.
+        - dataset_dir: (str, optional) path to dataset directory, containing the /train and a /test directories.
                             Defaults to FLAGS.bair_dir or FLAGS.google_dir, defined in training_flags.py, depending on
                             the dataset_name parameter.
         """
         super(BairPredictionsDataReader, self).__init__(*args, **kwargs)
         self.dataset_name = 'bair_predictions'
-        self.data_dir = dataset_dir if dataset_dir else FLAGS.bair_predictions_dir
+        self.data_dir = dataset_dir
         self.data_dir = os.path.join(self.data_dir, self.dataset_name, model_name)
-        self.train_filenames, self.val_filenames, self.test_filenames = self.set_filenames()
+
+        if self.data_dir is not None:
+            self.train_filenames, self.val_filenames, self.test_filenames = self.set_filenames()
 
     def _parse_sequences(self, serialized_example):
         image_seq, action_target_seq = [], []
