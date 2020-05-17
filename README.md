@@ -43,7 +43,7 @@ The argument 'model_name' can be one of ('cdna', 'savp', 'savp_vae', 'sv2p', 'sv
 **2. Create a dataset of video predictions**
 ```
 python scripts/create_prediction_datasets.py \
-  --model_list sv2p savp_vae \
+  --model_list cdna sv2p savp savp_vae svg  \
   --data_dir /path/to/bair/softmotion30_44k \
   --vp_ckpts_dir pretrained_vp_models \
   --save_dir prediction_datasets
@@ -52,7 +52,7 @@ python scripts/create_prediction_datasets.py \
 **3. Train the action inference model on the predictions**
 ```
 python scripts/train_inference_models.py \
-  --model_list sv2p savp_vae 
+  --model_list cdna sv2p savp savp_vae svg 
   --predictions_data_dir prediction_datasets  
   --model_save_dir pretrained_inference_models
 ```
