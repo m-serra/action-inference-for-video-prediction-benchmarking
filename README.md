@@ -4,6 +4,7 @@
 
 [[Paper]](https://arxiv.org/abs/1910.02564)
 
+
 ### Overview
 In the past few years research on video prediction models has been the subject of increasing interest. Applications include [weather nowcasting], future [semantic segmentation] or, when action information is available as input, [robotic planning]. While for the first tasks evaluating the quality of predictions using metrics designed to approximate human perception of quality, such as PSNR and SSIM, may be an obvious solution, from the standpoint of a robot planning its actions, image quality is not necessarily the most important aspect of the predictions.
 With this in mind, we argue that in a planning context, video predictions should be evaluated by how well they encode action features. And if the action features were correctly encoded, then it should be possible to infer executed action from the predicted frames.
@@ -79,7 +80,7 @@ If somehow we've helped with your research consider citing using the following
 @article{nunes2019action,
   title={Action-conditioned Benchmarking of Robotic Video Prediction Models: a Comparative Study},
   author={Nunes, Manuel Serra and Dehban, Atabak and Moreno, Plinio and Santos-Victor, Jos{\'e}},
-  journal={arXiv preprint arXiv:1910.02564},
+  journal={International Conference on Robotics and Automation (ICRA), 2020},
   year={2019}
 }
 ```
