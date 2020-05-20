@@ -61,7 +61,7 @@ python scripts/train_inference_models.py \
 **4. Evaluate the action inference model on the prediction test set and compute goodness of fit**
 ```
 python scripts/evaluate_inference_models.py \
-  --model_list sv2p savp_vae \
+  --model_list cdna sv2p savp savp_vae svg \
   --predictions_data_dir prediction_datasets\
   --model_ckpt_dir pretrained_inference_models \
   --results_save_dir results
