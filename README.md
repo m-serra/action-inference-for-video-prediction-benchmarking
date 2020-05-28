@@ -2,7 +2,7 @@
 
 --------------------
 
-[[Paper]](https://arxiv.org/abs/1910.02564)
+[[Paper]](https://arxiv.org/abs/1910.02564) | [[ICRA 2020 Presentation]](https://www.youtube.com/watch?v=MVCRLVg8vc8&t=6s)
 
 
 ### Overview
